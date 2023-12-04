@@ -1,0 +1,7 @@
+number = @{ASCII_DIGIT+}
+number_list = {number+}
+winning_list = {number+}
+game_identifier = {"Card" ~ number ~ ":"}
+line = {game_identifier ~ winning_list ~ "|" ~ number_list ~ NEWLINE}
+file = {SOI ~  line* ~ EOI}
+WHITESPACE = _{ " " }
