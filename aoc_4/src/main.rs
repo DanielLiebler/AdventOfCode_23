@@ -10,6 +10,11 @@ use pest_derive::Parser;
 #[grammar = "scratchcards.pest"]
 struct MyParser;
 
+struct Scratchcard {
+    counts: u32,
+    score: usize,
+}
+
 fn analyze_list(list: Pair<'_, Rule>) -> Vec<u32> {
     let mut parsed: Vec<u32> = Vec::new();
 
@@ -32,7 +37,7 @@ fn analyze_list(list: Pair<'_, Rule>) -> Vec<u32> {
     return parsed;
 }
 
-fn analyze_line(line: Pair<'_, Rule>) -> u32 {
+fn analyze_line(line: Pair<'_, Rule>) -> usize {
     let mut win_list: Option<Vec<u32>> = None;
     let mut num_list: Option<Vec<u32>> = None;
     for entry in line.into_inner() {
@@ -59,14 +64,10 @@ fn analyze_line(line: Pair<'_, Rule>) -> u32 {
 
     match (win_list, num_list) {
         (Some(wins), Some(nums)) => {
-            let mut points: u32 = 0;
+            let mut points: usize = 0;
             for num in nums {
                 if wins.contains(&num) {
-                    if points == 0 {
-                        points = 1;
-                    } else {
-                        points *= 2;
-                    }
+                    points += 1;
                 }
             }
             return points;
@@ -84,14 +85,18 @@ fn analyze_line(line: Pair<'_, Rule>) -> u32 {
     return 0;
 }
 
-fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> u32 {
-    let mut sum = 0;
+fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Vec<Scratchcard> {
+    let mut s_cards: Vec<Scratchcard> = Vec::new();
 
     let unwrapped = parsed.next().unwrap();
     for line in unwrapped.into_inner() {
         match line.as_rule() {
             Rule::line => {
-                sum += analyze_line(line);
+                let score = analyze_line(line);
+                s_cards.push(Scratchcard {
+                    counts: 1,
+                    score: score,
+                });
             }
             Rule::EOI => {
                 println!("EOI {}", line.as_str());
@@ -101,7 +106,22 @@ fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> u32 {
             }
         }
     }
-    return sum;
+    return s_cards;
+}
+
+fn collect_prizes(cards: &mut Vec<Scratchcard>) -> u32 {
+    for i in 0..cards.len() {
+        if cards[i].score > 0 {
+            for j in i + 1..i + 1 + cards[i].score {
+                if j >= cards.len() {
+                    break;
+                }
+                cards[j].counts += cards[i].counts;
+            }
+        }
+    }
+
+    return cards.iter().fold(0, |sum, card| sum + card.counts);
 }
 
 fn main() {
@@ -116,9 +136,10 @@ fn main() {
         Ok(mut result) => {
             println!("Parse file OK");
             println!("==========");
-            let sum = analyze_file(&mut result);
+            let mut cards = analyze_file(&mut result);
             println!("==========");
-            println!("Points: {sum}");
+            let card_count = collect_prizes(&mut cards);
+            println!("Card count is {card_count}")
         }
         Err(result) => {
             println!("ERR:  Could not parse file: {result}");
