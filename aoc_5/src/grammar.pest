@@ -1,0 +1,15 @@
+number = @{ASCII_DIGIT+}
+number_list = {number+}
+start_src = {number}
+start_dest = {number}
+length = {number}
+from = @{ASCII_ALPHA+}
+to = @{ASCII_ALPHA+}
+WHITESPACE = _{ " " }
+
+map_header = {from ~ "-to-" ~ to ~ "map:" ~ NEWLINE}
+map_entry = {start_dest ~ start_src ~ length ~ NEWLINE}
+
+map = {NEWLINE ~ map_header ~ map_entry+}
+seeds = {"seeds:" ~ number_list ~ NEWLINE}
+file = {SOI ~ seeds ~ map+ ~ EOI}

@@ -121,7 +121,12 @@ fn collect_prizes(cards: &mut Vec<Scratchcard>) -> u32 {
         }
     }
 
-    return cards.iter().fold(0, |sum, card| sum + card.counts);
+    let score = cards.iter().fold(0, |sum, card| sum + card.counts);
+
+    for card in cards {
+        println!("{}", card.counts);
+    }
+    return score;
 }
 
 fn main() {
