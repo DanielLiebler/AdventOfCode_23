@@ -1,5 +1,7 @@
 number = @{ASCII_DIGIT+}
-number_list = {number+}
+count = @{ASCII_DIGIT+}
+number_pair = {number ~ count}
+number_list = {number_pair+}
 start_src = {number}
 start_dest = {number}
 length = {number}

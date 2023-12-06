@@ -30,20 +30,52 @@ impl Map {
     }
 }
 
-fn analyze_number_list(entry: Pair<'_, Rule>) -> Vec<usize> {
-    let mut seeds: Vec<usize> = Vec::new();
+fn analyze_number_pair(pair: Pair<'_, Rule>) -> Result<(usize, usize), &str> {
+    let mut num: Option<usize> = None;
+    let mut count: Option<usize> = None;
+    for n in pair.into_inner() {
+        match n.as_rule() {
+            Rule::number => match n.as_str().parse::<usize>() {
+                Ok(i) => num = Some(i),
+                Err(e) => println!("Error parsing number {e}"),
+            },
+            Rule::count => match n.as_str().parse::<usize>() {
+                Ok(i) => count = Some(i),
+                Err(e) => println!("Error parsing number {e}"),
+            },
+            Rule::EOI => {
+                println!("      EOI {}", n.as_str());
+            }
+            _ => {
+                println!("UNEXPECTED PARSE(NumberPair) {}", n.as_str());
+            }
+        }
+    }
+
+    match (num, count) {
+        (Some(i), Some(j)) => return Ok((i, j)),
+        _ => return Err("Could not parse pair"),
+    }
+}
+
+fn analyze_number_list(entry: Pair<'_, Rule>) -> Vec<(usize, usize)> {
+    let mut seeds: Vec<(usize, usize)> = Vec::new();
 
     for number in entry.into_inner() {
         match number.as_rule() {
-            Rule::number => match number.as_str().parse::<usize>() {
-                Ok(i) => seeds.push(i),
-                Err(e) => println!("Error parsing number {e}"),
+            Rule::number_pair => match analyze_number_pair(number) {
+                Ok((num, count)) => {
+                    if count > 0 {
+                        seeds.push((num, count));
+                    }
+                }
+                Err(_e) => {}
             },
             Rule::EOI => {
                 println!("    EOI {}", number.as_str());
             }
             _ => {
-                println!("UNEXPECTED PARSE(Number) {}", number.as_str());
+                println!("UNEXPECTED PARSE(NumberList) {}", number.as_str());
             }
         }
     }
@@ -51,8 +83,8 @@ fn analyze_number_list(entry: Pair<'_, Rule>) -> Vec<usize> {
     return seeds;
 }
 
-fn analyze_seeds(parsed: Pair<'_, Rule>) -> Option<Vec<usize>> {
-    let mut seeds: Option<Vec<usize>> = None;
+fn analyze_seeds(parsed: Pair<'_, Rule>) -> Option<Vec<(usize, usize)>> {
+    let mut seeds: Option<Vec<(usize, usize)>> = None;
     for entry in parsed.into_inner() {
         match entry.as_rule() {
             Rule::number_list => seeds = Some(analyze_number_list(entry)),
@@ -164,9 +196,11 @@ fn analyze_map(entry: Pair<'_, Rule>) -> Result<Map, &str> {
     return Ok(map);
 }
 
-fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Result<(Vec<usize>, Vec<Map>), &'static str> {
+fn analyze_file(
+    parsed: &mut Pairs<'_, Rule>,
+) -> Result<(Vec<(usize, usize)>, Vec<Map>), &'static str> {
     let unwrapped = parsed.next().unwrap();
-    let mut seeds: Option<Vec<usize>> = None;
+    let mut seeds: Option<Vec<(usize, usize)>> = None;
     let mut maps: Vec<Map> = Vec::new();
 
     for line in unwrapped.into_inner() {
@@ -199,15 +233,26 @@ fn get_next_map<'a>(maps: &'a Vec<Map>, precedent: Option<&Map>) -> Option<&'a M
     }
 }
 
-fn print_mapping(mapped_to: &Vec<usize>) {
-    for num in mapped_to {
-        print!("{num} ");
+fn print_mapping(mapped_to: &Vec<(usize, usize)>, precedent: Option<&Map>) {
+    print!(
+        "{}: ",
+        precedent.map_or("seed".to_string(), |p| p.from.clone())
+    );
+
+    for (num, cnt) in mapped_to {
+        print!("{},{} ", num, cnt);
     }
     println!("");
 }
 
-fn solve_seeding(seeds: Vec<usize>, maps: Vec<Map>) -> usize {
-    for map in &maps {
+fn intersects(start_a: usize, len_a: usize, start_b: usize, len_b: usize) -> bool {
+    let start_a_intersects = start_a >= start_b && start_a < start_b + len_b;
+    let start_b_intersects = start_b >= start_a && start_b < start_a + len_a;
+    return start_a_intersects || start_b_intersects;
+}
+
+fn print_maps(maps: &Vec<Map>) {
+    for map in maps {
         println!("Map: {}->{}", map.from, map.to);
         for mapping in &map.mappings {
             println!(
@@ -220,49 +265,87 @@ fn solve_seeding(seeds: Vec<usize>, maps: Vec<Map>) -> usize {
             );
         }
     }
+}
+
+fn solve_seeding(seeds: Vec<(usize, usize)>, maps: Vec<Map>) -> usize {
+    //print_maps(&maps);
 
     let mut mapped_to = seeds;
     let mut precedent: Option<&Map> = None;
 
     loop {
-        print!(
-            "{}: ",
-            precedent.map_or("seed".to_string(), |p| p.from.clone())
-        );
-        print_mapping(&mapped_to);
+        //print_mapping(&mapped_to, precedent);
         match get_next_map(&maps, precedent) {
             Some(m) => {
                 precedent = Some(m);
                 mapped_to = mapped_to
                     .iter()
-                    .map(|&num| {
-                        match m.mappings.iter().find(|mapping| {
-                            num >= mapping.start_source && num < mapping.start_source + mapping.len
-                        }) {
-                            Some(mapping) => {
-                                let mapped = mapping.start_dest + num - mapping.start_source;
-                                return mapped;
-                            }
-                            None => {
-                                return num;
-                            }
-                        }
+                    .flat_map(|&(num, cnt)| {
+                        let mut mapped = Vec::new();
+                        let mut remaining = vec![(num, cnt)];
+                        m.mappings.iter().for_each(|m| {
+                            remaining = remaining
+                                .iter()
+                                .flat_map(|&(start, len)| {
+                                    if m.start_source <= start
+                                        && m.start_source + m.len >= start + len
+                                    {
+                                        // is completely moved
+                                        mapped.push((start + m.start_dest - m.start_source, len));
+                                        return vec![];
+                                    } else if m.start_source <= start
+                                        && m.start_source + m.len > start
+                                    {
+                                        // only starting part is moved
+                                        let moved_len = m.start_source + m.len - start;
+                                        mapped.push((
+                                            start + m.start_dest - m.start_source,
+                                            moved_len,
+                                        ));
+                                        return vec![(start + moved_len, len - moved_len)];
+                                    } else if m.start_source < start + len
+                                        && m.start_source + m.len >= start + len
+                                    {
+                                        // only ending part is moved
+                                        let moved_len = start + len - m.start_source;
+                                        mapped.push((m.start_dest, moved_len));
+                                        return vec![(start, len - moved_len)];
+                                    } else if m.start_source > start
+                                        && m.start_source + m.len < start + len
+                                    {
+                                        // only part in the middle
+                                        let first_remaining_len = m.start_source - start;
+                                        let moved_len = m.len;
+                                        let second_remaining_len =
+                                            start + len - m.start_source - m.len;
+                                        mapped.push((m.start_dest, moved_len));
+                                        return vec![
+                                            (start, first_remaining_len),
+                                            (
+                                                start + first_remaining_len + moved_len,
+                                                second_remaining_len,
+                                            ),
+                                        ];
+                                    } else {
+                                        return vec![(start, len)];
+                                    }
+                                })
+                                .collect::<Vec<(usize, usize)>>();
+                        });
+                        mapped.append(&mut remaining);
+                        return mapped;
                     })
-                    .collect::<Vec<usize>>();
+                    .collect::<Vec<(usize, usize)>>();
             }
             None => {
-                print!(
-                    "{}: ",
-                    precedent.map_or("seed".to_string(), |p| p.from.clone())
-                );
-                print_mapping(&mapped_to);
+                //print_mapping(&mapped_to, precedent);
                 break;
             }
         }
     }
 
     mapped_to.sort();
-    return mapped_to[0];
+    return mapped_to[0].0;
 }
 fn main() {
     let args: Vec<String> = env::args().collect();
