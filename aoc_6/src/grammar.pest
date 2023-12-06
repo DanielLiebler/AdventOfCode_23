@@ -1,0 +1,7 @@
+number = @{ASCII_DIGIT+}
+number_list = {number+}
+
+times = {"Time:" ~ number_list ~ NEWLINE}
+distances = {"Distance:" ~ number_list ~ NEWLINE}
+file = {SOI ~ times ~ distances ~ EOI}
+WHITESPACE = _{ " " }
