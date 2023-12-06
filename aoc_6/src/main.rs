@@ -10,11 +10,11 @@ use pest_derive::Parser;
 #[grammar = "grammar.pest"]
 struct MyParser;
 
-fn analyze_number_list(parsed: Pair<'_, Rule>) -> Result<Vec<u32>, &'static str> {
-    let mut list: Vec<u32> = Vec::new();
+fn analyze_number_list(parsed: Pair<'_, Rule>) -> Result<Vec<u64>, &'static str> {
+    let mut list: Vec<u64> = Vec::new();
     for num in parsed.into_inner() {
         match num.as_rule() {
-            Rule::number => match num.as_str().parse::<u32>() {
+            Rule::number => match num.as_str().parse::<u64>() {
                 Ok(i) => list.push(i),
                 Err(e) => println!("Error parsing number {e}"),
             },
@@ -26,11 +26,17 @@ fn analyze_number_list(parsed: Pair<'_, Rule>) -> Result<Vec<u32>, &'static str>
             }
         }
     }
-    return Ok(list);
+
+    // return Ok(list);
+
+    let base: u64 = 10;
+    return Ok(vec![list.iter().fold(0, |accumulator: u64, n: &u64| {
+        accumulator * base.pow(n.to_string().len().try_into().unwrap()) + n
+    })]);
 }
 
-fn analyze_number_list_entry(parsed: Pair<'_, Rule>) -> Result<Vec<u32>, &'static str> {
-    let mut list: Option<Vec<u32>> = None;
+fn analyze_number_list_entry(parsed: Pair<'_, Rule>) -> Result<Vec<u64>, &'static str> {
+    let mut list: Option<Vec<u64>> = None;
     for entry in parsed.into_inner() {
         match entry.as_rule() {
             Rule::number_list => match analyze_number_list(entry) {
@@ -51,9 +57,9 @@ fn analyze_number_list_entry(parsed: Pair<'_, Rule>) -> Result<Vec<u32>, &'stati
     }
 }
 
-fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Result<(Vec<u32>, Vec<u32>), &'static str> {
-    let mut times: Option<Vec<u32>> = None;
-    let mut distances: Option<Vec<u32>> = None;
+fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Result<(Vec<u64>, Vec<u64>), &'static str> {
+    let mut times: Option<Vec<u64>> = None;
+    let mut distances: Option<Vec<u64>> = None;
     let unwrapped = parsed.next().unwrap();
     for line in unwrapped.into_inner() {
         match line.as_rule() {
@@ -81,16 +87,16 @@ fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Result<(Vec<u32>, Vec<u32>), &'
     }
 }
 
-fn restructure_races<'a>(times: &'a Vec<u32>, distances: &'a Vec<u32>) -> Vec<(&'a u32, &'a u32)> {
-    let games: Vec<(&u32, &u32)> = times.iter().zip(distances.iter()).collect();
+fn restructure_races<'a>(times: &'a Vec<u64>, distances: &'a Vec<u64>) -> Vec<(&'a u64, &'a u64)> {
+    let games: Vec<(&u64, &u64)> = times.iter().zip(distances.iter()).collect();
     return games;
 }
 
-fn count_win_possibilities(games: Vec<(&u32, &u32)>) -> Vec<u32> {
+fn count_win_possibilities(games: Vec<(&u64, &u64)>) -> Vec<u64> {
     return games
         .iter()
         .map(|&(time, distance)| {
-            let mut wins: u32 = 0;
+            let mut wins: u64 = 0;
             for t0 in 1..*time {
                 if (time - t0) * t0 >= *distance {
                     wins += 1;
@@ -117,7 +123,7 @@ fn main() {
             Ok((times, distances)) => {
                 let games = restructure_races(&times, &distances);
                 let wins = count_win_possibilities(games);
-                let score = wins.iter().fold(1, |accumulator: u32, w| accumulator * w);
+                let score = wins.iter().fold(1, |accumulator: u64, w| accumulator * w);
 
                 println!("Score is {score}")
             }
