@@ -1,0 +1,7 @@
+number = @{ASCII_DIGIT+}
+card = @{'2'..'9' | "T" | "J" | "Q" | "K" | "A"}
+
+line = {card{5} ~ number ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }
