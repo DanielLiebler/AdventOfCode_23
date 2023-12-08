@@ -1,8 +1,8 @@
 number = @{ASCII_DIGIT+}
 direction = @{"L" | "R"}
-ident = @{ASCII_ALPHA_UPPER{3}}
-left = @{ASCII_ALPHA_UPPER{3}}
-right = @{ASCII_ALPHA_UPPER{3}}
+ident = @{(ASCII_ALPHA_UPPER|ASCII_DIGIT){3}}
+left = @{(ASCII_ALPHA_UPPER|ASCII_DIGIT){3}}
+right = @{(ASCII_ALPHA_UPPER|ASCII_DIGIT){3}}
 
 sequence = {direction+ ~ NEWLINE}
 node = {ident ~ "= (" ~ left ~ "," ~ right ~ ")" ~ NEWLINE}

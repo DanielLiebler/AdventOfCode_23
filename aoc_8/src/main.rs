@@ -6,6 +6,8 @@ use pest::iterators::Pairs;
 use pest::Parser;
 use pest_derive::Parser;
 
+use gcd::Gcd;
+
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct MyParser;
@@ -156,6 +158,167 @@ fn traverse_maze(nodes: &Vec<Node>, steps_per_run: usize) -> usize {
 
     return runs * steps_per_run;
 }
+
+fn check_node_type(ident: u32, to_check: &str) -> bool {
+    let val = (ident ^ ident_to_num(to_check)) & 0xff == 0;
+    return val;
+}
+
+fn to_ident(ident: u32) -> String {
+    return String::from_utf8(vec![
+        ((ident >> 16) & 0xff) as u8,
+        ((ident >> 8) & 0xff) as u8,
+        ((ident) & 0xff) as u8,
+    ])
+    .expect("could not convert back");
+}
+
+fn traverse_maze_ghost(nodes: &Vec<Node>, steps_per_run: usize) -> usize {
+    let nodes_solved: Vec<(u32, usize, bool)> = nodes
+        .iter()
+        .map(|node| {
+            (
+                node.ident,
+                nodes
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, n)| {
+                        if n.ident == node.fast_travel {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("could not find start"),
+                check_node_type(node.ident, "ZZZ"),
+            )
+        })
+        .collect();
+    let mut cur_nodes: Vec<(u32, usize, usize)> = nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, n)| {
+            if check_node_type(n.ident, "AAA") {
+                Some((n.ident, i, i))
+            } else {
+                None
+            }
+        })
+        .collect();
+    /*println!("found {} starts", cur_nodes.len());
+    let ends = nodes_solved.iter().filter(|(_ident, _refer, goal)| *goal);
+    for (ident, _refer, goal) in ends {
+        println!("Goal: {}({})", to_ident(*ident), *goal);
+    }*/
+    //println!("found {} ends", ends.count());
+
+    let mut nodes_history: Vec<(Vec<(usize, bool)>, usize)> = cur_nodes
+        .iter()
+        .map(|(_ident, _start_refer, _refer)| (vec![(*_start_refer, false)], 0))
+        .collect();
+
+    let mut runs = 0;
+    let mut finished = false;
+    while !finished {
+        /*if runs % 10000000 == 0 {
+            println!("Round {}Mrd/13334", runs / 1000000000);
+        }*/
+
+        finished = true;
+        for (i, (_start_ident, _start_index, node_index)) in cur_nodes.iter_mut().enumerate() {
+            let referenced = nodes_solved.get(*node_index).expect("could not find node");
+
+            let my_nodes_history = nodes_history.get_mut(i).expect("could not access history");
+            match my_nodes_history
+                .0
+                .iter()
+                .enumerate()
+                .find(|(_i, &(j, _goal))| j == referenced.1)
+            {
+                Some((i, (_j, _goal))) => {
+                    if my_nodes_history.1 == 0 {
+                        my_nodes_history.1 = my_nodes_history.0.len() - i;
+                        /*println!(
+                            "Found circle for {} with length {}",
+                            to_ident(*_start_ident),
+                            my_nodes_history.1
+                        );
+                        for (h, _goal) in &my_nodes_history.0 {
+                            print!(
+                                "{} ",
+                                to_ident(nodes_solved.get(*h).expect("could not solve pointer").0)
+                            );
+                        }
+                        println!(
+                            "{}",
+                            to_ident(
+                                nodes_solved
+                                    .get(referenced.1)
+                                    .expect("could not solve pointer")
+                                    .0
+                            )
+                        );*/
+                    }
+                }
+                None => {
+                    my_nodes_history.0.push((
+                        referenced.1,
+                        nodes_solved
+                            .get(referenced.1)
+                            .expect("could not find node")
+                            .2,
+                    ));
+                }
+            }
+            *node_index = referenced.1;
+
+            if !nodes_solved
+                .get(referenced.1)
+                .expect("could not find node")
+                .2
+            {
+                finished = false;
+            }
+        }
+        if nodes_history.iter().filter(|(_h, len)| *len == 0).count() == 0 {
+            break;
+        }
+        runs += 1;
+    }
+    /*println!("Runs: {runs}");
+
+    print!("Goals per start loop: ");
+    nodes_history
+        .iter()
+        .map(|(h, _len)| h.iter().filter(|(_refer, goal)| *goal).count())
+        .for_each(|count| println!(" {count}"));
+    println!("");*/
+
+    let lcm_val = nodes_history
+        .iter()
+        .map(|(h, len)| {
+            let index = h
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (_refer, goal))| if *goal { Some(i) } else { None })
+                .next()
+                .expect("expected a goal to exist");
+            (index + len - h.len(), len, h.len() - len)
+        })
+        .fold(1, |accu, (index, len, skip)| {
+            //println!("Goal at {skip}+{index}/{len}");
+            return lcm(accu, *len);
+        });
+    //println!("Runs: {lcm_val}");
+    runs = lcm_val;
+
+    return runs * steps_per_run;
+}
+
+fn lcm(a: usize, b: usize) -> usize {
+    return a * b / a.gcd(b);
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path = &args[1];
@@ -171,8 +334,9 @@ fn main() {
                 Ok((seq, mut nodes)) => {
                     let steps_per_run = seq.len();
                     transmute_maze(seq, &mut nodes);
-                    let final_steps = traverse_maze(&nodes, steps_per_run);
-                    println!("final count of steps is {final_steps}");
+                    let final_steps = 0; //traverse_maze(&nodes, steps_per_run);
+                    let final_steps_ghost = traverse_maze_ghost(&nodes, steps_per_run);
+                    println!("final count of steps is {final_steps}, {final_steps_ghost}");
                 }
                 Err(e) => println!("Error parsing maze: {e}"),
             }
