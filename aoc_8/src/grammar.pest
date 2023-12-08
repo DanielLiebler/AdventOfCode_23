@@ -1,0 +1,11 @@
+number = @{ASCII_DIGIT+}
+direction = @{"L" | "R"}
+ident = @{ASCII_ALPHA_UPPER{3}}
+left = @{ASCII_ALPHA_UPPER{3}}
+right = @{ASCII_ALPHA_UPPER{3}}
+
+sequence = {direction+ ~ NEWLINE}
+node = {ident ~ "= (" ~ left ~ "," ~ right ~ ")" ~ NEWLINE}
+
+file = {SOI ~ sequence ~ NEWLINE ~ node+ ~ EOI}
+WHITESPACE = _{ " " }

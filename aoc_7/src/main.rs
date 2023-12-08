@@ -63,7 +63,7 @@ impl Card {
             Card::Eight => 8,
             Card::Nine => 9,
             Card::Ten => 10,
-            Card::J => 11,
+            Card::J => 1,
             Card::Q => 12,
             Card::K => 13,
             Card::A => 14,
@@ -154,29 +154,49 @@ impl Hand {
             },
         ];
         for c in &self.cards {
-            match accu.iter_mut().find(|cc| cc.card.eq(c)) {
-                Some(cc) => cc.count += 1,
-                None => println!("Err: Lost cardcount!"),
-            };
+            if *c == Card::J {
+                for cc in accu.iter_mut() {
+                    cc.count += 1;
+                }
+            } else {
+                match accu.iter_mut().find(|cc| cc.card.eq(c)) {
+                    Some(cc) => cc.count += 1,
+                    None => println!("Err: Lost cardcount!"),
+                };
+            }
         }
         accu.sort_by(|a, b| {
             return b.count.cmp(&a.count);
         });
+        let jokers = match accu.iter_mut().find(|cc| cc.card.eq(&Card::J)) {
+            Some(cc) => cc.count,
+            None => 0,
+        };
         match accu.get(0).expect("Err: Lost cardcount later!").count {
             5 => return 6, // five of a kind
             4 => return 5, // four of a kind
-            3 => match accu.get(1).expect("Err: Lost cardcount later!").count {
-                2 => return 4, // full house
-                1 => return 3, // three of a kind
+            i if i == 3 => match accu.get(1).expect("Err: Lost cardcount later!").count {
+                j if j >= 1 => {
+                    if i + j - jokers >= 5 {
+                        return 4;
+                    } else {
+                        return 3;
+                    }
+                } // full house
                 _ => println!("unexpected count!"),
             },
-            2 => match accu.get(1).expect("Err: Lost cardcount later!").count {
-                2 => return 2, // two pairs
-                1 => return 1, // pair
+            i if i == 2 => match accu.get(1).expect("Err: Lost cardcount later!").count {
+                j if j >= 1 => {
+                    if i + j - jokers >= 4 {
+                        return 2;
+                    } else {
+                        return 1;
+                    }
+                } // full house
                 _ => println!("unexpected count!"),
             },
             1 => return 0, // high card
-            _ => println!("unexpected count!2"),
+            _ => println!("unexpected count!3"),
         }
         return 0;
     }
@@ -279,6 +299,8 @@ fn main() {
     match parse_result {
         Ok(mut result) => {
             let mut hands = analyze_file(&mut result);
+            hands.sort();
+            println!("Sorted:");
             for h in &hands {
                 print!("C({}, {}):", h.bid, h.get_hand_value());
                 for c in &h.cards {
@@ -286,19 +308,8 @@ fn main() {
                 }
                 println!("");
             }
-            hands.sort();
-            println!("Sorted:");
-            for h in &hands {
-                print!("C:");
-                for c in &h.cards {
-                    print!("{},", c.as_value());
-                }
-                println!("");
-            }
             let sum = hands.iter().enumerate().fold(0, |accu, (i, h)| {
-                let j = accu + u32::try_from(i + 1).unwrap() * h.bid;
-                println!("{}:{} = {j}", i + 1, h.bid);
-                j
+                accu + u32::try_from(i + 1).unwrap() * h.bid
             });
             println!("Sum is {sum}");
         }
