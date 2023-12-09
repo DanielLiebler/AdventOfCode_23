@@ -1,0 +1,5 @@
+entry = @{"-"? ~ ASCII_DIGIT+}
+report = {entry+ ~ NEWLINE}
+
+file = {SOI ~ report+ ~ EOI}
+WHITESPACE = _{ " " }
