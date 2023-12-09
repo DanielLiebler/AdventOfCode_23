@@ -100,7 +100,7 @@ fn find_deductions(reports: &mut Vec<Report>) {
     }
 }
 
-fn extrapolate_reports(reports: &mut Vec<Report>) {
+fn _extrapolate_reports(reports: &mut Vec<Report>) {
     for report in reports.iter_mut() {
         if report.deductions.len() == 0 {
             report.next_val = *report
@@ -135,6 +135,44 @@ fn extrapolate_reports(reports: &mut Vec<Report>) {
                 + last_item;
             report.next_val = last_item;
             report.sequence.push(report.next_val);
+        }
+    }
+}
+fn extrapolate_reports_front(reports: &mut Vec<Report>) {
+    for report in reports.iter_mut() {
+        if report.deductions.len() == 0 {
+            report.next_val = *report
+                .sequence
+                .first()
+                .expect("could not access first of sequence");
+            report.sequence.insert(0, report.next_val);
+        } else {
+            report.deductions.reverse();
+            let mut last_item = 0;
+            report
+                .deductions
+                .get_mut(0)
+                .expect("could not slice deductions(0)")
+                .insert(0, 0);
+            for deduction in report
+                .deductions
+                .get_mut(1..)
+                .expect("Could not slice deductions")
+                .iter_mut()
+            {
+                last_item = deduction
+                    .first()
+                    .expect("could not access first item of deduction")
+                    - last_item;
+                deduction.insert(0, last_item);
+            }
+            last_item = report
+                .sequence
+                .first()
+                .expect("could not access last item of deduction")
+                - last_item;
+            report.next_val = last_item;
+            report.sequence.insert(0, report.next_val);
         }
     }
 }
@@ -174,8 +212,8 @@ fn main() {
         Ok(mut result) => {
             let mut reports = analyze_file(&mut result);
             find_deductions(&mut reports);
-            extrapolate_reports(&mut reports);
-
+            //_extrapolate_reports(&mut reports);
+            extrapolate_reports_front(&mut reports);
             //_print_report(&reports);
 
             let sum = sum_extrapolations(&reports);
