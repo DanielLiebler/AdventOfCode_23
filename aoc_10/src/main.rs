@@ -6,6 +6,8 @@ use pest::iterators::Pairs;
 use pest::Parser;
 use pest_derive::Parser;
 
+use colored::Colorize;
+
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct MyParser;
@@ -20,6 +22,22 @@ enum Pipe {
     SECorner,
     SWCorner,
     Ground,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+enum LoopType {
+    Inside,
+    Outside,
+    Loop,
+    Undefined,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+struct Tile {
+    is_loop: LoopType,
+    pipe: Pipe,
+    direction: bool,
+    loop_part: bool,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -313,7 +331,9 @@ fn is_neighbor(grid: &Vec<Vec<Pipe>>, x: usize, y: usize, dir: Direction) -> boo
         return false;
     }
 }
-fn find_first_neighbors(grid: &Vec<Vec<Pipe>>) -> Result<Vec<Node>, &'static str> {
+fn find_first_neighbors(
+    grid: &Vec<Vec<Pipe>>,
+) -> Result<(Vec<Node>, (usize, usize)), &'static str> {
     let start: Option<(usize, usize)> = grid
         .iter()
         .enumerate()
@@ -367,7 +387,7 @@ fn find_first_neighbors(grid: &Vec<Vec<Pipe>>) -> Result<Vec<Node>, &'static str
             }
 
             if result.len() == 2 {
-                return Ok(result);
+                return Ok((result, (i, j)));
             } else {
                 println!("Found {} nbs", result.len());
                 for n in result {
@@ -383,6 +403,82 @@ fn find_first_neighbors(grid: &Vec<Vec<Pipe>>) -> Result<Vec<Node>, &'static str
 fn nodes_match(a: &Node, b: &Node) -> bool {
     a.x == b.x && a.y == b.y
 }
+
+fn add_to_tile_grid(
+    tile_grid: &mut Vec<Vec<Tile>>,
+    next_node: &Node,
+    grid: &Vec<Vec<Pipe>>,
+    direction: bool,
+) {
+    let tile = tile_grid
+        .get_mut(next_node.y)
+        .expect("tile_grid not big enough")
+        .get_mut(next_node.x)
+        .expect("tile_grid not big enough");
+    tile.is_loop = LoopType::Loop;
+    tile.pipe = grid
+        .get(next_node.y)
+        .expect("grid not big enough")
+        .get(next_node.x)
+        .expect("grid not big enough")
+        .clone();
+    tile.loop_part = direction;
+    tile.direction = match (tile.pipe, next_node.from) {
+        (Pipe::Vertical, Direction::North) => direction,
+        (Pipe::Vertical, Direction::South) => !direction,
+        (Pipe::Vertical, _) => {
+            println!("Did not expect E/W for V");
+            true
+        }
+        (Pipe::Horizontal, Direction::East) => !direction,
+        (Pipe::Horizontal, Direction::West) => direction,
+        (Pipe::Horizontal, _) => {
+            println!("Did not expect N/S for H");
+            true
+        }
+        (Pipe::NECorner, Direction::North) => direction,
+        (Pipe::NECorner, Direction::East) => !direction,
+        (Pipe::NECorner, _) => {
+            println!("Did not expect S/W for NE");
+            true
+        }
+        (Pipe::NWCorner, Direction::North) => direction,
+        (Pipe::NWCorner, Direction::West) => !direction,
+        (Pipe::NWCorner, _) => {
+            println!("Did not expect S/E for NW");
+            true
+        }
+        (Pipe::SECorner, Direction::East) => !direction,
+        (Pipe::SECorner, Direction::South) => direction,
+        (Pipe::SECorner, _) => {
+            println!("Did not expect N/W for SE");
+            true
+        }
+        (Pipe::SWCorner, Direction::West) => direction,
+        (Pipe::SWCorner, Direction::South) => !direction,
+        (Pipe::SWCorner, _) => {
+            println!("Did not expect N/E for SW");
+            true
+        }
+        (Pipe::Ground, _) => {
+            println!("Did not expect ground");
+            true
+        }
+        (Pipe::Start, _) => {
+            println!("Did not expect start");
+            true
+        }
+    };
+}
+
+fn swap_in_outside(val: &mut LoopType) {
+    if *val == LoopType::Outside {
+        *val = LoopType::Inside;
+    } else if *val == LoopType::Inside {
+        *val = LoopType::Outside;
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path = &args[1];
@@ -394,9 +490,11 @@ fn main() {
     match parse_result {
         Ok(mut result) => {
             let grid = analyze_file(&mut result);
+            let x_len = grid.first().expect("did not expect no entry in grid").len();
+            let y_len = grid.len();
 
             match find_first_neighbors(&grid) {
-                Ok(first_neighbors) => {
+                Ok((first_neighbors, start)) => {
                     for n in &first_neighbors {
                         println!("First: {}/{}", n.x, n.y);
                     }
@@ -404,19 +502,46 @@ fn main() {
                     let mut a = f_n_iter.next().expect("could not find neighbor a").clone();
                     let mut b = f_n_iter.next().expect("could not find neighbor b").clone();
                     let mut steps = 1;
+
+                    let mut tile_grid: Vec<Vec<Tile>> = vec![
+                        vec![
+                            Tile {
+                                is_loop: LoopType::Undefined,
+                                pipe: Pipe::Ground,
+                                direction: false,
+                                loop_part: false,
+                            };
+                            x_len
+                        ];
+                        y_len
+                    ];
+
+                    let start_tile = tile_grid
+                        .get_mut(start.1)
+                        .expect("could not access start in tile_grid")
+                        .get_mut(start.0)
+                        .expect("could not access start in tile_grid");
+                    start_tile.is_loop = LoopType::Loop;
+                    start_tile.pipe = Pipe::Start;
+                    start_tile.direction = true;
+                    start_tile.loop_part = true;
+
+                    add_to_tile_grid(&mut tile_grid, &a, &grid, true);
+                    add_to_tile_grid(&mut tile_grid, &b, &grid, false);
+
                     loop {
                         let next_a = match find_next(&grid, a.from, a.x, a.y) {
                             Ok(next_a) => next_a,
                             Err(_e) => {
                                 println!("Error finding next: {_e}");
-                                break;
+                                return;
                             }
                         };
                         let next_b = match find_next(&grid, b.from, b.x, b.y) {
                             Ok(next_b) => next_b,
                             Err(_e) => {
                                 println!("Error finding next: {_e}");
-                                break;
+                                return;
                             }
                         };
 
@@ -429,11 +554,105 @@ fn main() {
                             break;
                         } else if nodes_match(&next_a, &next_b) {
                             println!("{steps} steps(both)");
+                            add_to_tile_grid(&mut tile_grid, &next_a, &grid, true);
                             break;
                         }
+
+                        add_to_tile_grid(&mut tile_grid, &next_a, &grid, true);
+                        add_to_tile_grid(&mut tile_grid, &next_b, &grid, false);
                         a = next_a;
                         b = next_b;
                     }
+
+                    // Calculate inside and outside definition
+                    for line in tile_grid.iter_mut() {
+                        let mut state = LoopType::Outside;
+                        let mut creep_upper_half = true;
+                        for tile in line.iter_mut() {
+                            match tile.is_loop {
+                                LoopType::Loop => match (tile.pipe, tile.direction) {
+                                    (Pipe::Start, _) => {
+                                        println!("TODO");
+                                        creep_upper_half = false;
+                                        //state = LoopType::Undefined;
+                                    }
+                                    (Pipe::Vertical, _) => {
+                                        swap_in_outside(&mut state);
+                                    }
+                                    (Pipe::Horizontal, _) => {}
+                                    (Pipe::NECorner, _) => {
+                                        creep_upper_half = false;
+                                    }
+                                    (Pipe::NWCorner, _) => {
+                                        if creep_upper_half {
+                                            swap_in_outside(&mut state);
+                                        }
+                                    }
+                                    (Pipe::SECorner, _) => {
+                                        creep_upper_half = true;
+                                    }
+                                    (Pipe::SWCorner, _) => {
+                                        if !creep_upper_half {
+                                            swap_in_outside(&mut state);
+                                        }
+                                    }
+                                    (Pipe::Ground, _) => println!("Should not find ground on loop"),
+                                },
+                                LoopType::Undefined => tile.is_loop = state.clone(),
+                                LoopType::Inside => println!("Should not be set yet"),
+                                LoopType::Outside => println!("Should not be set yet"),
+                            }
+                        }
+                    }
+
+                    let count = tile_grid.iter().fold((0, 0), |accu: (usize, usize), line| {
+                        let res = line.iter().fold((0, 0), |accu: (usize, usize), t| {
+                            if t.is_loop == LoopType::Inside {
+                                (accu.0 + 1, accu.1)
+                            } else if t.is_loop == LoopType::Outside {
+                                (accu.0, accu.1 + 1)
+                            } else {
+                                (accu.0, accu.1)
+                            }
+                        });
+                        (accu.0 + res.0, accu.1 + res.1)
+                    });
+                    println!("Found {} Inside, {} Outside", count.0, count.1);
+
+                    // Visualize
+                    for line in &tile_grid {
+                        for tile in line {
+                            if tile.is_loop == LoopType::Loop {
+                                let (p, col) = match (tile.pipe, tile.loop_part) {
+                                    (Pipe::Start, d) => ("S", d),
+                                    (Pipe::Vertical, d) => ("|", d),
+                                    (Pipe::Horizontal, d) => ("-", d),
+                                    (Pipe::NECorner, d) => ("L", d),
+                                    (Pipe::NWCorner, d) => ("J", d),
+                                    (Pipe::SECorner, d) => ("F", d),
+                                    (Pipe::SWCorner, d) => ("7", d),
+                                    (Pipe::Ground, d) => ("X", d),
+                                };
+                                if p == "S" {
+                                    print!("{}", "S".green());
+                                } else if col {
+                                    print!("{}", p.blue());
+                                } else {
+                                    print!("{}", p.red());
+                                }
+                            } else {
+                                match tile.is_loop {
+                                    LoopType::Inside => print!("{}", ".".yellow()),
+                                    LoopType::Outside => print!("{}", ".".cyan()),
+                                    LoopType::Loop => print!("{}", "X".green()),
+                                    LoopType::Undefined => print!("{}", "X".green()),
+                                }
+                            }
+                        }
+                        println!("");
+                    }
+
+                    // TODO: Count
                 }
                 Err(_e) => println!("Err {_e}"),
             }
