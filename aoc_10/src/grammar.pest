@@ -1,0 +1,13 @@
+start = @{"S"}
+vertical = @{"|"}
+horizontal = @{"-"}
+ne_corner = @{"L"}
+nw_corner = @{"J"}
+sw_corner = @{"7"}
+se_corner = @{"F"}
+ground = @{"."}
+
+line = {(start | vertical | horizontal | ne_corner | nw_corner | se_corner | sw_corner | ground)+ ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }
