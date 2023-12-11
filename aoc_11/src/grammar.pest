@@ -1,0 +1,7 @@
+empty = @{"."}
+galaxy = @{"#"}
+
+line = {(empty | galaxy)+ ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }

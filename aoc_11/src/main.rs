@@ -157,10 +157,10 @@ fn main() {
                         continue;
                     }
                     let distance = find_distance(galaxy_a, galaxy_b, &expanding_x, &expanding_y);
-                    println!(
+                    /*println!(
                         "G{i}, G{j}: {distance}  ({}/{} {}/{})",
                         galaxy_a.x, galaxy_a.y, galaxy_b.x, galaxy_b.y
-                    );
+                    );*/
                     total_distance += distance;
                 }
             }
