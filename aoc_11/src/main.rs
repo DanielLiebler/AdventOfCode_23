@@ -120,7 +120,7 @@ fn count_expansions(low: usize, high: usize, expanding: &Vec<usize>) -> usize {
 }
 fn count_path_len(low: usize, high: usize, expanding: &Vec<usize>) -> usize {
     let expansions_x = count_expansions(low, high, expanding);
-    return high - low + expansions_x;
+    return high - low + expansions_x * 999999;
 }
 fn find_distance(
     a: &Coordinates,
