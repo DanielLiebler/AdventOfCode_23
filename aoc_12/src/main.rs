@@ -7,13 +7,15 @@ use pest::iterators::Pairs;
 use pest::Parser;
 use pest_derive::Parser;
 
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct MyParser;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Eq, Hash)]
 enum Spring {
     Operational,
     Damaged,
@@ -118,19 +120,84 @@ fn analyze_file(parsed: &mut Pairs<'_, Rule>) -> Vec<Line> {
     return space;
 }
 
+fn permutations(blocks: usize, space: usize) -> usize {
+    if space == 0 {
+        return 1;
+    } else if blocks == 1 {
+        return space + 1;
+    }
+    let mut sum = 0;
+    for i in 0..space + 1 {
+        sum += permutations(blocks - 1, space - i);
+    }
+    return sum;
+}
+
+fn as_number(block: &[Spring]) -> (u128, u128) {
+    let mut result: (u128, u128) = (0, 0);
+    let mut flipflop = false;
+    for s in block {
+        match flipflop {
+            true => {
+                result.0 = result.0 * 4
+                    + match *s {
+                        Spring::Operational => 1,
+                        Spring::Damaged => 2,
+                        Spring::Unknown => 3,
+                    };
+                flipflop = false;
+            }
+            false => {
+                result.1 = result.1 * 4
+                    + match *s {
+                        Spring::Operational => 1,
+                        Spring::Damaged => 2,
+                        Spring::Unknown => 3,
+                    };
+                flipflop = true;
+            }
+        }
+    }
+    return result;
+}
+
 fn find_arrangements_in_block(
     (len, block): (usize, &[Spring]),
     pattern: &Vec<usize>,
     start: usize,
     pattern_count: usize,
+    cache: &mut HashMap<(usize, usize, usize, (u128, u128)), usize>,
 ) -> usize {
+    match cache.get(&(start, pattern_count, len, as_number(block))) {
+        Some(&cached) => {
+            return cached;
+        }
+        None => {}
+    }
+
     //print!("\n        Block: S{start}({pattern_count} blks) strlen[{len}]");
     if !match pattern.get(start..start + pattern_count) {
         Some(slice) => slice.iter().fold(0, |accu, l| accu + *l + 1) <= len + 1,
         None => false,
     } {
         // there is not enough space to fit the patterns begin with
+
+        cache.insert((start, pattern_count, len, as_number(block)), 0);
         return 0;
+    }
+    if block.iter().find(|s| **s != Spring::Unknown).is_none() {
+        // all ?, so its easy to compute
+        let patterns = pattern
+            .get(start..start + pattern_count)
+            .expect("expected patterns be valid");
+        let sum: usize = patterns.iter().sum();
+        let count = patterns.len();
+
+        let remaining_space = len + 1 - sum - count;
+
+        let result = permutations(count, remaining_space);
+        cache.insert((start, pattern_count, len, as_number(block)), result);
+        return result;
     }
 
     let max_skip =
@@ -144,7 +211,7 @@ fn find_arrangements_in_block(
         };
     let first_pattern = pattern.get(start).expect("could not find first pattern");
     if pattern_count == 1 {
-        return (*first_pattern..cmp::min(*first_pattern + max_skip + 1, len + 1))
+        let result = (*first_pattern..cmp::min(*first_pattern + max_skip + 1, len + 1))
             .filter(|i| {
                 block
                     .get(*i..)
@@ -155,6 +222,9 @@ fn find_arrangements_in_block(
                     == 0
             })
             .count();
+
+        cache.insert((start, pattern_count, len, as_number(block)), result);
+        return result;
     } else {
         let mut arrangements = 0;
         for skip in *first_pattern + 1..*first_pattern + 1 + max_skip + 1 {
@@ -173,8 +243,10 @@ fn find_arrangements_in_block(
                 pattern,
                 start + 1,
                 pattern_count - 1,
+                cache,
             );
         }
+        cache.insert((start, pattern_count, len, as_number(block)), arrangements);
         return arrangements;
     }
 }
@@ -183,6 +255,7 @@ fn find_fitting_blocks(
     (len, block): (usize, &[Spring]),
     pattern: &Vec<usize>,
     proposed_starts: impl Iterator<Item = usize>,
+    cache: &mut HashMap<(usize, usize, usize, (u128, u128)), usize>,
 ) -> Vec<Vec<(usize, usize)>> {
     print!("  Finding Fitting blocks in block({len}):");
 
@@ -200,7 +273,7 @@ fn find_fitting_blocks(
 
         loop {
             let arrangements_in_block =
-                find_arrangements_in_block((len, block), pattern, start, block_count);
+                find_arrangements_in_block((len, block), pattern, start, block_count, cache);
             if arrangements_in_block == 0 {
                 // no arrangements found, we can skip searching
                 //break;
@@ -222,6 +295,7 @@ fn find_fitting_blocks(
 
 fn find_arrangements_in_line(line: &Line, line_num: usize) -> usize {
     let mut max_lists: Vec<(usize, &[Spring])> = Vec::new();
+    let mut cache: HashMap<(usize, usize, usize, (u128, u128)), usize> = HashMap::new();
 
     let mut count = 0;
     for (i, spring) in line.spring_list.iter().enumerate() {
@@ -261,6 +335,7 @@ fn find_arrangements_in_line(line: &Line, line_num: usize) -> usize {
             *block,
             &line.number_list,
             starts.iter().map(|(start, _arrs)| *start),
+            &mut cache,
         );
         starts = arrs
             .iter()
@@ -322,6 +397,29 @@ fn main() {
     match parse_result {
         Ok(mut result) => {
             let mut lines = analyze_file(&mut result);
+            for line in lines.iter_mut() {
+                let mut numbers1 = line.number_list.clone();
+                let mut numbers2 = line.number_list.clone();
+                let mut numbers3 = line.number_list.clone();
+                let mut numbers4 = line.number_list.clone();
+                line.number_list.append(&mut numbers1);
+                line.number_list.append(&mut numbers2);
+                line.number_list.append(&mut numbers3);
+                line.number_list.append(&mut numbers4);
+
+                let mut springs1 = line.spring_list.clone();
+                let mut springs2 = line.spring_list.clone();
+                let mut springs3 = line.spring_list.clone();
+                let mut springs4 = line.spring_list.clone();
+                line.spring_list.push(Spring::Unknown);
+                line.spring_list.append(&mut springs1);
+                line.spring_list.push(Spring::Unknown);
+                line.spring_list.append(&mut springs2);
+                line.spring_list.push(Spring::Unknown);
+                line.spring_list.append(&mut springs3);
+                line.spring_list.push(Spring::Unknown);
+                line.spring_list.append(&mut springs4);
+            }
             find_arrangements(&mut lines);
         }
         Err(result) => {
