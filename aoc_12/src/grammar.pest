@@ -1,0 +1,12 @@
+operational = @{"."}
+damaged = @{"#"}
+unknown = @{"?"}
+num = @{ASCII_DIGIT+}
+spring_list = {(num ~ ",")* ~ num}
+
+spring = {operational | damaged | unknown}
+
+line = {spring+ ~ spring_list ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }
