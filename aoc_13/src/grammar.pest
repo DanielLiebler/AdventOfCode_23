@@ -1,0 +1,8 @@
+ash = @{"."}
+rock = @{"#"}
+
+line = {(ash |rock)+ ~ NEWLINE}
+pattern = {line+}
+
+file = {SOI ~ (pattern ~ NEWLINE)+ ~ pattern ~ EOI}
+WHITESPACE = _{ " " }
