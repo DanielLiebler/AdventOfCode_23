@@ -1,0 +1,8 @@
+empty = @{"."}
+round = @{"O"}
+cube = @{"#"}
+
+line = {(empty | round |cube)+ ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }
