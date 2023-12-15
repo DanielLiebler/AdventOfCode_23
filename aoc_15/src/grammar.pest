@@ -1,0 +1,6 @@
+character = @{!("," | NEWLINE) ~ ASCII}
+
+entry = {character+}
+
+file = {SOI ~ (entry ~ ",")* ~ entry ~ NEWLINE ~ EOI}
+WHITESPACE = _{ " " }
