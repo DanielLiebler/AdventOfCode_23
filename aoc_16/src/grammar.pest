@@ -1,0 +1,11 @@
+empty = @{"."}
+splitter_h = @{"-"}
+splitter_v = @{"|"}
+mirror_tl = @{"/"}
+mirror_tr = @{"\\"}
+
+tile = {(empty | splitter_h | splitter_v | mirror_tl | mirror_tr)}
+
+line = {tile+ ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}

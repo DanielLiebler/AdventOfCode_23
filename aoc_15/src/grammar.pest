@@ -1,6 +1,10 @@
-character = @{!("," | NEWLINE) ~ ASCII}
+character = @{!("," | "=" | "-" | NEWLINE) ~ ASCII}
+number = @{ASCII_DIGIT+}
+hash = {character+}
 
-entry = {character+}
+add_entry = {hash ~ "=" ~ number}
+remove_entry = {hash ~ "-"}
+entry = {add_entry | remove_entry}
 
 file = {SOI ~ (entry ~ ",")* ~ entry ~ NEWLINE ~ EOI}
 WHITESPACE = _{ " " }
