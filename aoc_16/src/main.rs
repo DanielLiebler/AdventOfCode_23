@@ -10,6 +10,7 @@ use pest_derive::Parser;
 #[grammar = "grammar.pest"]
 struct MyParser;
 
+#[derive(PartialEq, Clone, Eq)]
 enum TileContent {
     Empty,
     SplitterHorizontal,
@@ -17,6 +18,8 @@ enum TileContent {
     MirrorTopLeft,
     MirrorTopRight,
 }
+
+#[derive(PartialEq, Clone, Eq)]
 struct Tile {
     content: TileContent,
     power: usize,
@@ -204,20 +207,19 @@ fn move_ray(
         None => *remove_ray = true,
     };
 }
-fn calculate_powers(grid: &mut Vec<Vec<Tile>>) {
+fn calculate_powers(
+    grid: &mut Vec<Vec<Tile>>,
+    dimensions: &Dimension,
+    start_x: usize,
+    start_y: usize,
+    start_direction: Direction,
+) {
     let mut rays: Vec<Ray> = vec![Ray {
-        x: 0,
-        y: 0,
-        direction: Direction::Right,
+        x: start_x,
+        y: start_y,
+        direction: start_direction,
     }];
 
-    let dimensions = Dimension {
-        x: grid
-            .first()
-            .expect("could not access first line of grid")
-            .len(),
-        y: grid.len(),
-    };
     loop {
         let mut remove_ray = false;
         let mut add_ray: Option<Ray> = None;
@@ -346,9 +348,57 @@ fn main() {
     match parse_result {
         Ok(mut result) => {
             let mut grid = analyze_file(&mut result);
-            calculate_powers(&mut grid);
 
-            println!("Power sum is {}", sum_power(&grid));
+            let dimensions = Dimension {
+                x: grid
+                    .first()
+                    .expect("could not access first line of grid")
+                    .len(),
+                y: grid.len(),
+            };
+            let mut max_power = 0;
+            for x in 0..dimensions.x {
+                let mut power_down_grid = grid.to_vec();
+                calculate_powers(&mut power_down_grid, &dimensions, x, 0, Direction::Down);
+                let mut power_up_grid = grid.to_vec();
+                calculate_powers(
+                    &mut power_up_grid,
+                    &dimensions,
+                    x,
+                    dimensions.x - 1,
+                    Direction::Up,
+                );
+                let power_down = sum_power(&power_down_grid);
+                let power_up = sum_power(&power_up_grid);
+                if power_down > max_power {
+                    max_power = power_down;
+                }
+                if power_up > max_power {
+                    max_power = power_up;
+                }
+            }
+            for y in 0..dimensions.y {
+                let mut power_right_grid = grid.to_vec();
+                calculate_powers(&mut power_right_grid, &dimensions, 0, y, Direction::Right);
+                let mut power_left_grid = grid.to_vec();
+                calculate_powers(
+                    &mut power_left_grid,
+                    &dimensions,
+                    dimensions.y - 1,
+                    y,
+                    Direction::Left,
+                );
+                let power_right = sum_power(&power_right_grid);
+                let power_left = sum_power(&power_left_grid);
+                if power_right > max_power {
+                    max_power = power_right;
+                }
+                if power_left > max_power {
+                    max_power = power_left;
+                }
+            }
+
+            println!("Max power sum is {}", max_power);
         }
         Err(result) => {
             println!("ERR:  Could not parse file: {result}");
