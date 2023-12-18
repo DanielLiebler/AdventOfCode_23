@@ -1,0 +1,5 @@
+digit = @{ASCII_DIGIT}
+line = {digit+ ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
+WHITESPACE = _{ " " }
