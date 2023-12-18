@@ -544,13 +544,13 @@ fn get_node_dijkstra<'a>(
     direction: Direction,
 ) -> Option<&'a mut DijkstraNode> {
     return grid.get_mut(
-        (x + dimensions.x * y) * 12
+        (x + dimensions.x * y) * 40
             + match direction {
                 Direction::Left => 0,
                 Direction::Right => 1,
                 Direction::Up => 2,
                 Direction::Down => 3,
-            } * 3
+            } * 10
             + (straight_len - 1),
     );
 }
@@ -626,14 +626,16 @@ fn find_path_dijkstra(grid: &mut Vec<Vec<Tile>>, dimensions: &Dimension) -> usiz
                 ]
                 .iter()
                 .flat_map(|dir| {
-                    [1, 2, 3].iter().map(|l| DijkstraNode {
-                        heat_loss: tile.heat_loss,
-                        x: j,
-                        y: i,
-                        prev_heat_loss: 0,
-                        straight_len: *l,
-                        direction: *dir,
-                    })
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                        .iter()
+                        .map(|l| DijkstraNode {
+                            heat_loss: tile.heat_loss,
+                            x: j,
+                            y: i,
+                            prev_heat_loss: 0,
+                            straight_len: *l,
+                            direction: *dir,
+                        })
                 })
                 .collect::<Vec<DijkstraNode>>()
             })
@@ -723,9 +725,11 @@ fn find_path_dijkstra(grid: &mut Vec<Vec<Tile>>, dimensions: &Dimension) -> usiz
                                     node.prev_heat_loss = exploration.heat_loss;
 
                                     if x == dimensions.x - 1 && y == dimensions.y - 1 {
-                                        return exploration.heat_loss + node.heat_loss;
+                                        if exploration.straight_len >= 4 {
+                                            return exploration.heat_loss + node.heat_loss;
+                                        }
                                     } else {
-                                        if exploration.straight_len < 3 {
+                                        if exploration.straight_len < 10 {
                                             let straight = generate_next_exploration(
                                                 dimensions,
                                                 &exploration,
@@ -743,37 +747,49 @@ fn find_path_dijkstra(grid: &mut Vec<Vec<Tile>>, dimensions: &Dimension) -> usiz
                                             }
                                         }
 
-                                        let (left, right) = match exploration.direction {
-                                            Direction::Up => (Direction::Left, Direction::Right),
-                                            Direction::Left => (Direction::Down, Direction::Up),
-                                            Direction::Down => (Direction::Right, Direction::Left),
-                                            Direction::Right => (Direction::Up, Direction::Down),
-                                        };
-                                        let left_exploration = generate_next_exploration(
-                                            dimensions,
-                                            &exploration,
-                                            left,
-                                            x,
-                                            y,
-                                            node.heat_loss,
-                                            true,
-                                        );
-                                        match left_exploration {
-                                            Some(new_exploration) => to_add.push(new_exploration),
-                                            None => {}
-                                        }
-                                        let right_exploration = generate_next_exploration(
-                                            dimensions,
-                                            &exploration,
-                                            right,
-                                            x,
-                                            y,
-                                            node.heat_loss,
-                                            true,
-                                        );
-                                        match right_exploration {
-                                            Some(new_exploration) => to_add.push(new_exploration),
-                                            None => {}
+                                        if exploration.straight_len >= 4 {
+                                            let (left, right) = match exploration.direction {
+                                                Direction::Up => {
+                                                    (Direction::Left, Direction::Right)
+                                                }
+                                                Direction::Left => (Direction::Down, Direction::Up),
+                                                Direction::Down => {
+                                                    (Direction::Right, Direction::Left)
+                                                }
+                                                Direction::Right => {
+                                                    (Direction::Up, Direction::Down)
+                                                }
+                                            };
+                                            let left_exploration = generate_next_exploration(
+                                                dimensions,
+                                                &exploration,
+                                                left,
+                                                x,
+                                                y,
+                                                node.heat_loss,
+                                                true,
+                                            );
+                                            match left_exploration {
+                                                Some(new_exploration) => {
+                                                    to_add.push(new_exploration)
+                                                }
+                                                None => {}
+                                            }
+                                            let right_exploration = generate_next_exploration(
+                                                dimensions,
+                                                &exploration,
+                                                right,
+                                                x,
+                                                y,
+                                                node.heat_loss,
+                                                true,
+                                            );
+                                            match right_exploration {
+                                                Some(new_exploration) => {
+                                                    to_add.push(new_exploration)
+                                                }
+                                                None => {}
+                                            }
                                         }
                                     }
                                 }
