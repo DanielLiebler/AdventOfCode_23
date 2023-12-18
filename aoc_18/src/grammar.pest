@@ -1,11 +1,17 @@
 number = @{ASCII_DIGIT+}
-hex = @{ASCII_HEX_DIGIT+}
+hex = @{ASCII_HEX_DIGIT{5}}
 up = @{"U"}
 down = @{"D"}
 right = @{"R"}
 left = @{"L"}
 direction = {up | down | right | left}
+up_hex = @{"3"}
+down_hex = @{"1"}
+right_hex = @{"0"}
+left_hex = @{"2"}
+hex_dir = {up_hex | down_hex | right_hex | left_hex}
 
-line = {direction ~ " " ~ number ~ " (#" ~ hex ~ ")" ~ NEWLINE}
+
+line = {direction ~ " " ~ number ~ " (#" ~ hex ~ hex_dir ~ ")" ~ NEWLINE}
 
 file = {SOI ~ line+ ~ EOI}

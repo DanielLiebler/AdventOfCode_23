@@ -23,6 +23,31 @@ struct DigPlanEntry {
     length: i64,
 }
 
+fn analyze_direction_hex(parsed: Pair<'_, Rule>) -> Option<Direction> {
+    for entry in parsed.into_inner() {
+        match entry.as_rule() {
+            Rule::up_hex => {
+                return Some(Direction::Up);
+            }
+            Rule::down_hex => {
+                return Some(Direction::Down);
+            }
+            Rule::left_hex => {
+                return Some(Direction::Left);
+            }
+            Rule::right_hex => {
+                return Some(Direction::Right);
+            }
+            Rule::EOI => {
+                println!("EOI {}", entry.as_str());
+            }
+            _ => {
+                println!("UNEXPECTED PARSE(entry) {}", entry.as_str());
+            }
+        }
+    }
+    return None;
+}
 fn analyze_direction(parsed: Pair<'_, Rule>) -> Option<Direction> {
     for entry in parsed.into_inner() {
         match entry.as_rule() {
@@ -38,7 +63,6 @@ fn analyze_direction(parsed: Pair<'_, Rule>) -> Option<Direction> {
             Rule::right => {
                 return Some(Direction::Right);
             }
-            Rule::hex => {}
             Rule::EOI => {
                 println!("EOI {}", entry.as_str());
             }
@@ -53,6 +77,8 @@ fn analyze_direction(parsed: Pair<'_, Rule>) -> Option<Direction> {
 fn analyze_line(parsed: Pair<'_, Rule>) -> Result<DigPlanEntry, &'static str> {
     let mut direction: Option<Direction> = None;
     let mut count: Option<i64> = None;
+    let mut direction_hex: Option<Direction> = None;
+    let mut count_hex: Option<i64> = None;
     for entry in parsed.into_inner() {
         match entry.as_rule() {
             Rule::direction => {
@@ -66,7 +92,15 @@ fn analyze_line(parsed: Pair<'_, Rule>) -> Result<DigPlanEntry, &'static str> {
                         .expect("could not parse sequence entry"),
                 );
             }
-            Rule::hex => {}
+            Rule::hex => {
+                count_hex = Some(
+                    i64::from_str_radix(entry.as_str(), 16)
+                        .expect("could not parse sequence entry"),
+                );
+            }
+            Rule::hex_dir => {
+                direction_hex = analyze_direction_hex(entry);
+            }
             Rule::EOI => {
                 println!("EOI {}", entry.as_str());
             }
@@ -76,7 +110,8 @@ fn analyze_line(parsed: Pair<'_, Rule>) -> Result<DigPlanEntry, &'static str> {
         }
     }
 
-    match (direction, count) {
+    //match (direction, count) {
+    match (direction_hex, count_hex) {
         (Some(d), Some(c)) => {
             return Ok(DigPlanEntry {
                 direction: d,
@@ -220,8 +255,8 @@ fn sum_area_cw(dig_plan: &Vec<DigPlanEntry>) -> i64 {
                         if offset > 0 {
                             area -= offset * entry.length;
                         }
-                        if height < 0 {
-                            height -= 0;
+                        /*if height < 0 {
+                            height = -height;
                             println!("Swapping anchor");
                             first_direction = match first_direction {
                                 Direction::Up => Direction::Down,
@@ -229,7 +264,7 @@ fn sum_area_cw(dig_plan: &Vec<DigPlanEntry>) -> i64 {
                                 Direction::Down => Direction::Up,
                                 Direction::Right => Direction::Left,
                             }
-                        }
+                        }*/
                     }
                     Direction::Right => {
                         offset -= entry.length;
