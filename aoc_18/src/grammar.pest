@@ -1,0 +1,11 @@
+number = @{ASCII_DIGIT+}
+hex = @{ASCII_HEX_DIGIT+}
+up = @{"U"}
+down = @{"D"}
+right = @{"R"}
+left = @{"L"}
+direction = {up | down | right | left}
+
+line = {direction ~ " " ~ number ~ " (#" ~ hex ~ ")" ~ NEWLINE}
+
+file = {SOI ~ line+ ~ EOI}
