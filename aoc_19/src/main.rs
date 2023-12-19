@@ -1,3 +1,5 @@
+use std::cmp::max;
+use std::cmp::min;
 use std::env;
 use std::fs;
 
@@ -37,6 +39,23 @@ struct Variable {
 struct Part {
     current_step: Target,
     variables: Vec<Variable>,
+}
+
+#[derive(PartialEq, Clone, Eq)]
+struct Range {
+    from: usize,
+    to: usize,
+}
+#[derive(PartialEq, Clone, Eq)]
+struct Ranges {
+    x: Range,
+    m: Range,
+    a: Range,
+    s: Range,
+}
+struct Exploration {
+    target: Target,
+    ranges: Ranges,
 }
 
 fn analyze_variable(parsed: Pair<'_, Rule>) -> Result<Variable, &'static str> {
@@ -279,6 +298,132 @@ fn run_workflow(workflows: &Vec<Workflow>, part: &mut Part) {
         }
     }
 }
+
+fn constrict_range(range: &Range, rule: &WorkflowRule) -> Range {
+    match (rule.less_than, rule.greater_than) {
+        (None, None) => return range.clone(),
+        (None, Some(gt)) => {
+            return Range {
+                from: max(range.from, gt + 1),
+                to: range.to,
+            }
+        }
+        (Some(lt), None) => {
+            return Range {
+                from: range.from,
+                to: min(range.to, lt - 1),
+            }
+        }
+        (Some(lt), Some(gt)) => {
+            return Range {
+                from: max(range.from, gt + 1),
+                to: min(range.to, lt - 1),
+            }
+        }
+    }
+}
+fn constrict_ranges(ranges: &Ranges, rule: &WorkflowRule) -> Ranges {
+    match rule.variable {
+        'x' => {
+            return Ranges {
+                x: constrict_range(&ranges.x, rule),
+                m: ranges.m.clone(),
+                a: ranges.a.clone(),
+                s: ranges.s.clone(),
+            };
+        }
+        'm' => {
+            return Ranges {
+                x: ranges.x.clone(),
+                m: constrict_range(&ranges.m, rule),
+                a: ranges.a.clone(),
+                s: ranges.s.clone(),
+            };
+        }
+        'a' => {
+            return Ranges {
+                x: ranges.x.clone(),
+                m: ranges.m.clone(),
+                a: constrict_range(&ranges.a, rule),
+                s: ranges.s.clone(),
+            };
+        }
+        's' => {
+            return Ranges {
+                x: ranges.x.clone(),
+                m: ranges.m.clone(),
+                a: ranges.a.clone(),
+                s: constrict_range(&ranges.s, rule),
+            };
+        }
+        c => {
+            println!("invalid variable {}", c);
+            return ranges.clone();
+        }
+    }
+}
+fn is_valid_range(range: &Range) -> bool {
+    return range.to >= range.from;
+}
+fn is_valid_ranges(ranges: &Ranges) -> bool {
+    return is_valid_range(&ranges.x)
+        && is_valid_range(&ranges.m)
+        && is_valid_range(&ranges.a)
+        && is_valid_range(&ranges.s);
+}
+fn get_range_len(range: &Range) -> usize {
+    return range.to - range.from + 1;
+}
+fn calc_accepted_permutations(workflows: &Vec<Workflow>) -> usize {
+    let mut explorations: Vec<Exploration> = vec![Exploration {
+        target: Target::Target(String::from("in")),
+        ranges: Ranges {
+            x: Range { from: 1, to: 4000 },
+            m: Range { from: 1, to: 4000 },
+            a: Range { from: 1, to: 4000 },
+            s: Range { from: 1, to: 4000 },
+        },
+    }];
+
+    let mut accepted: Vec<Ranges> = Vec::new();
+
+    loop {
+        match explorations.pop() {
+            Some(exploration) => match exploration.target {
+                Target::Accept => accepted.push(exploration.ranges),
+                Target::Reject => {}
+                Target::Target(target) => {
+                    match workflows.iter().find(|workflow| workflow.ident == target) {
+                        Some(workflow) => {
+                            for rule in workflow.rules.iter() {
+                                let new_ranges = constrict_ranges(&exploration.ranges, rule);
+                                if is_valid_ranges(&new_ranges) {
+                                    explorations.push(Exploration {
+                                        target: rule.target.clone(),
+                                        ranges: new_ranges,
+                                    });
+                                }
+                            }
+                        }
+                        None => println!("Target could not be found"),
+                    }
+                }
+            },
+            None => break,
+        }
+    }
+    // todo: merge ranges
+
+    return accepted
+        .iter()
+        .map(|ranges| {
+            get_range_len(&ranges.x)
+                * get_range_len(&ranges.m)
+                * get_range_len(&ranges.a)
+                * get_range_len(&ranges.s)
+        })
+        .sum();
+}
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path = &args[1];
@@ -291,7 +436,9 @@ fn main() {
         Ok(mut result) => {
             let (workflows, mut parts) = analyze_file(&mut result);
 
-            for part in parts.iter_mut() {
+            println!("Permutations: {}", calc_accepted_permutations(&workflows));
+
+            /*for part in parts.iter_mut() {
                 run_workflow(&workflows, part);
             }
 
@@ -308,7 +455,7 @@ fn main() {
                 })
                 .sum();
 
-            println!("Accepted Sum {accepted}");
+            println!("Accepted Sum {accepted}");*/
         }
         Err(result) => {
             println!("ERR:  Could not parse file: {result}");
