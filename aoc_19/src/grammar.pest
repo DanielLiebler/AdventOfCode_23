@@ -1,0 +1,17 @@
+number = @{ASCII_DIGIT+}
+variable = @{ASCII_ALPHA_LOWER}
+workflow_ident = @{ASCII_ALPHA_LOWER+}
+accept = @{"A"}
+reject = @{"R"}
+ident = {workflow_ident | accept | reject}
+
+greater = @{">"}
+less = @{"<"}
+rule = {variable ~ (greater | less) ~ number ~ ":" ~ ident}
+
+line = {workflow_ident ~ "{" ~ (rule ~ ",")* ~ ident ~ "}" ~ NEWLINE}
+
+variable_entry = {variable ~ "=" ~ number}
+entry = {"{" ~ variable_entry ~ ("," ~ variable_entry)* ~ "}" ~ NEWLINE}
+
+file = {SOI ~ line+ ~ NEWLINE ~ entry+ ~ EOI}
